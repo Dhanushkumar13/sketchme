@@ -16,7 +16,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction){
         next();
     }else{
         res.status(400).json({
-            message: "Unauthorized"
+            message: "Not a valid token"
         })
     }
 }
