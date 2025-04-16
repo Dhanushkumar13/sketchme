@@ -3,26 +3,21 @@ import z from 'zod';
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '@repo/backend-common/config';
 import { authMiddleware } from './authMiddleware';
+import {CreateUserSchema} from '@repo/common/types'
+
 
 const app: Application = express();
 app.use(express.json())
 
-const signupParse = z.object({
-    username: z.string().email(),
-    password: z.string(),
-    firstName: z.string(),
-    lastName: z.string(),
-})
 
 app.post('/signup',(req: Request, res: Response)=> {
-    const parseSuccess = signupParse.safeParse(req.body);
-
-    if(!parseSuccess.success){
-        res.json({
-            message: "Invalid input",
-            errors: parseSuccess.error.errors,
+    const data = CreateUserSchema.safeParse(req.body);
+    if(!data.success){
+         res.json({
+            message: "Incorrect inputs"
         })
-    }
+        return;
+    }    
 })
 
 app.post('/signin',async(req,res)=>{
