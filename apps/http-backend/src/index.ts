@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '@repo/backend-common/config';
 import { authMiddleware } from './authMiddleware';
 import {CreateRoomSchema, CreateUserSchema, SigninSchema} from '@repo/common/types'
-
+import {prismaClient} from '@repo/db/clients';
 
 const app: Application = express();
 app.use(express.json())
@@ -16,7 +16,8 @@ app.post('/signup',(req: Request, res: Response)=> {
             message: "Incorrect inputs"
         })
         return;
-    }    
+    }
+        
 })
 
 app.post('/signin',async(req,res)=>{
