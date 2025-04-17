@@ -1,5 +1,4 @@
 import express, { Application, Request, Response } from 'express';
-import z from 'zod';
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '@repo/backend-common/config';
 import { authMiddleware } from './authMiddleware';
