@@ -5,9 +5,11 @@ import { authMiddleware } from './authMiddleware';
 import {CreateRoomSchema, CreateUserSchema, SigninSchema} from '@repo/common/types'
 import {prismaClient} from '@repo/db/clients';
 import bcrypt from 'bcrypt'
+import cors from 'cors'
 
 const app: Application = express();
-app.use(express.json())
+app.use(express.json());
+app.use(cors());
 
 
 app.post('/signup',async(req: Request, res: Response)=> {
