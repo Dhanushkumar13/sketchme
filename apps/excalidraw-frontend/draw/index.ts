@@ -61,7 +61,7 @@ export async function initDraw(canvas: HTMLCanvasElement, roomId: string, socket
             y: startY,
             height,
             width
-        };
+        }
         existingShapes.push(shape);
 
         socket.send(JSON.stringify({
