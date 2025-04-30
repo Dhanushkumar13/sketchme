@@ -18,7 +18,7 @@ type Shape = {
     startY: number;
     endX: number;
     endY: number;
-}
+} | null
 
 export class Game{
     private canvas: HTMLCanvasElement;
@@ -28,6 +28,8 @@ export class Game{
     private clicked : boolean;
     private startX: number;
     private startY: number;
+    private draggedShape : Shape;
+    private eraserPath: [number, number][];
     private selectedTool: Tool = 'circle';
     socket: WebSocket;
     
@@ -41,10 +43,11 @@ export class Game{
         this.clicked = false;
         this.startX = 0;
         this.startY = 0;
+        this.draggedShape = null;
+        this.eraserPath = [];
         this.init();
         this.initHandlers();
         this.initMouseHandlers();
-        
     }
 
     destroy(){
@@ -55,7 +58,7 @@ export class Game{
         this.canvas.removeEventListener('mousemove', this.mouseMoveHandle);
     }
 
-    setShape(tool: "circle" | "rect" | "pencil"){
+    setShape(tool: Tool){
         this.selectedTool = tool;
     }
 
@@ -78,34 +81,67 @@ export class Game{
 
     clearCanvas(){
         this.ctx.clearRect(0,0,this.canvas.width, this.canvas.height);
-        this.ctx.fillStyle = "rgba(0,0,0)"
+        this.ctx.fillStyle = "black"
         this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
 
-        this.existingShapes.map((shape) => {
-        if(shape.type === 'rect'){
-            this.ctx.strokeStyle= "rgba(255,255,255)"
-            this.ctx.strokeRect(shape.x,shape.y,shape.width,shape.height);     
-        }else if (shape.type === 'circle'){
-            this.ctx.beginPath();
-            this.ctx.arc(shape.centerX, shape.centerY, Math.abs(shape.radius), 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.closePath();
-        }
-    })
+        this.existingShapes.map((shape)=>{
+            if(!shape) return;
+            if(shape.type === 'rect'){
+                this.ctx.strokeStyle = 'rgba(255,255,255)';
+                this.ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+            }else if (shape.type === 'circle'){
+                this.ctx.beginPath();
+                this.ctx.arc(shape.centerX, shape.centerY, Math.abs(shape.radius), 0 , Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.closePath();
+            }
+        })
+    }
+
+    findDistance(x1: number, y1: number, x2: number, y2: number): number{
+        return Math.sqrt((y2-y1) * (y2-1) + (x2-x1) * (x2-x1));
+    }
+
+    isPointInRect(x: number, y: number, shape: Shape) : boolean{
+        if(!shape || shape.type !== 'rect') return false;
+        return(
+            x >= shape.x && x<= shape.x + shape.width && y >= shape.y && y <= shape.y + shape.height
+        )
+    }
+
+    isPointCircle(x: number, y: number, shape: Shape) : boolean {
+        if(!shape || shape.type !== 'circle') return false
+        return(
+            this.findDistance(x, y, shape.centerX, shape.centerY) <= shape.radius
+        )
     }
 
     mouseDownHandler = (e: MouseEvent) => {
+
         this.clicked = true;
         this.startX = e.clientX;
         this.startY = e.clientY;
+        if(this.selectedTool === 'grab'){
+            for (const shape of this.existingShapes){
+                if(this.isPointInRect(e.clientX, e.clientY, shape) || this.isPointCircle(e.clientX, e.clientY, shape)){
+                    this.draggedShape = shape
+                }
+            }
+        }
+        if(this.selectedTool === 'eraser'){
+            this.eraserPath.push([e.clientX, e.clientY]);
+        }
     }
 
     mouseUpHandler = (e: MouseEvent) => {
-        this.clicked = false;
+            this.clicked = false;
             const width = e.clientX - this.startX;
             const height = e.clientY - this.startY;
             const selectedTool = this.selectedTool;
+            
+
             let shape: Shape | null = null;
+
             if(selectedTool === 'rect'){
                  shape = {
                     type: 'rect',
@@ -124,39 +160,70 @@ export class Game{
                     centerY: this.startY + radius,
                 }
                 
+            }else if(selectedTool === 'eraser'){
+                this.existingShapes = this.existingShapes.filter((shape) => {
+                    if(!shape) return false;
+                    return !this.eraserPath.some((point)=> {
+                        return this.isPointInRect(point[0], point[1], shape) || this.isPointCircle(point[0], point[1], shape);
+
+                    })
+                })
+                this.clearCanvas();
             }
+
             if(!shape){
-                return
+                return;
             }
-            this.existingShapes.push(shape);
-    
-            this.socket.send(JSON.stringify({
-                type: "chat",
-                message: JSON.stringify({
-                    shape,
-                }),
-                roomId: this.roomId
-            }));
+            
+            this.eraserPath = [];
+
+            if(shape){
+                this.existingShapes.push(shape);
+
+                this.socket.send(JSON.stringify({
+                    type: 'chat',
+                    message: JSON.stringify({
+                        shape
+                    }),
+                    roomId: this.roomId
+                }))
+            }
     }
 
     mouseMoveHandle= (e: MouseEvent)=> {
         if (this.clicked) {
+            const selectedTool = this.selectedTool;
             const width = e.clientX - this.startX;
             const height = e.clientY - this.startY;
             this.clearCanvas();
-            this.ctx.strokeStyle = "rgba(255,255,255)";
-            const selectedTool = this.selectedTool;
+            this.ctx.strokeStyle = 'rgba(255,255,255)'
+            
             if(selectedTool === 'rect'){
                 this.ctx.strokeRect(this.startX, this.startY, width, height);
-            } else if (selectedTool === 'circle'){
-                const centerX = this.startX + width/2;
-                const centerY = this.startY + height/2;
+            }else if( selectedTool === 'circle'){
                 const radius = Math.max(width, height) / 2;
+                const centerX = this.startX + radius;
+                const centerY = this.startY + radius;
                 this.ctx.beginPath();
                 this.ctx.arc(centerX, centerY, Math.abs(radius), 0, Math.PI * 2);
                 this.ctx.stroke();
                 this.ctx.closePath();
-            }                
+            }
+            else if(selectedTool === 'grab' && this.draggedShape){
+                if(this.draggedShape.type === 'rect'){
+                    const x1 = (2 * e.clientX - this.draggedShape.width) / 2, y1 = (2 * e.clientY - this.draggedShape.height) / 2;
+                    this.draggedShape.x = x1;
+                    this.draggedShape.y = y1;
+
+                }
+                if(this.draggedShape.type === 'circle'){
+                    this.draggedShape.centerX = e.clientX, this.draggedShape.centerY = e.clientY;
+
+                }
+            }
+            else if(selectedTool === 'eraser'){
+                this.eraserPath.push([e.clientX, e.clientY]);
+            }
         }
     }
 
